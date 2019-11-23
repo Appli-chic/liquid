@@ -9,11 +9,6 @@ class User {
     this.id,
     this.name,
   });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-      };
 }
 
 @Controller('users')
@@ -21,6 +16,11 @@ class UserController {
   @Get('/')
   User getUser() {
     return User(id: 0, name: 'Guillaume Belouin');
+  }
+
+  @Post('/')
+  User postUser() {
+    return User(id: 0, name: 'Guillaume Belouin created');
   }
 
   @Get('/text')

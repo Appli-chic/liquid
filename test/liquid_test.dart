@@ -3,10 +3,11 @@ import 'package:test/test.dart';
 
 void main() {
   group('A group of tests', () {
-    // Router router;
+    Application app;
 
-    setUp(() {
-      // router = Router();
+    setUp(() async {
+      app = Application();
+      await app.listen(3000);
     });
 
     test('First Test', () {});

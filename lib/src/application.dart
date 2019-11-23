@@ -19,12 +19,18 @@ class Application {
     print("The server is listening at ${_server.address.host}:${_server.port}");
 
     await for (HttpRequest request in _server) {
-      _redirectRequestsToControllers(request);
+      var methodFound = _redirectRequestsToControllers(request);
+
+      if (!methodFound) {
+        var response = request.response;
+        response.statusCode = 404;
+        await response.close();
+      }
     }
   }
 
   /// Redirect the [request] to the wanted controller
-  _redirectRequestsToControllers(HttpRequest request) {
+  bool _redirectRequestsToControllers(HttpRequest request) {
     RegExp exp = RegExp(r'(https?:\/\/.*):(\d*)\/?(.*)');
     List<RegExpMatch> matches =
         exp.allMatches(request.requestedUri.toString()).toList();
@@ -37,21 +43,29 @@ class Application {
             reflectClass(controller).metadata.first.reflectee.path;
         if (path.startsWith(controllerPath)) {
           // Check if one of the methods should answer
-          _checkingEachMethods(request, controller, controllerPath, path);
+          var methodFound =
+              _checkingEachMethods(request, controller, controllerPath, path);
+
+          if (methodFound) {
+            return true;
+          }
         }
       }
     }
+
+    return false;
   }
 
   /// Read the information of each methods from a [controller] class containing the right path.
   /// If one method contains the right path then we will call it.
-  _checkingEachMethods(HttpRequest request, dynamic controller,
+  bool _checkingEachMethods(HttpRequest request, dynamic controller,
       String controllerPath, String path) {
+    bool isMethodFound = false;
     Map<Symbol, MethodMirror> methods =
         reflectClass(controller).instanceMembers;
 
-    methods.forEach((Symbol symbol, MethodMirror method) {
-      var metadataValue = method.metadata.first.reflectee;
+    for (var entry in methods.entries) {
+      var metadataValue = entry.value.metadata.first.reflectee;
 
       try {
         if (metadataValue.path != null) {
@@ -60,17 +74,27 @@ class Application {
               path.indexOf(controllerPath) + controllerPath.length;
 
           if (methodPath != null) {
-            if (methodPath == '/' && indexControllerPath == path.length) {
-              _callMethod(request, controller, method);
-            } else if (path == '$controllerPath$methodPath') {
-              _callMethod(request, controller, method);
+            if (request.method ==
+                MirrorSystem.getName(entry.value.metadata.first.type.simpleName)
+                    .toUpperCase()) {
+              if (methodPath == '/' && indexControllerPath == path.length) {
+                _callMethod(request, controller, entry.value);
+                isMethodFound = true;
+                break;
+              } else if (path == '$controllerPath$methodPath') {
+                _callMethod(request, controller, entry.value);
+                isMethodFound = true;
+                break;
+              }
             }
           }
         }
       } catch (e) {
         print(e);
       }
-    });
+    }
+
+    return isMethodFound;
   }
 
   /// Call the [method] and create a response from the answer of this one
@@ -89,7 +113,7 @@ class Application {
     response.close();
   }
 
-  /// Create a response according to the type
+  /// Create a [response] according to the type from the returned [value]
   _createResponseFromType(HttpResponse response, dynamic value) {
     if (value is String || value is int || value is double) {
       response.headers.contentType = ContentType.text;
@@ -108,7 +132,7 @@ class Application {
     }
   }
 
-  /// Transforms objects into JSON data
+  /// Transforms objects [value] into JSON data
   String _parseObjectToJson(dynamic value) {
     var result = HashMap<String, dynamic>();
     InstanceMirror valueInstance = reflect(value);
