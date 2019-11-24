@@ -1,5 +1,5 @@
 import 'package:liquid/liquid.dart';
-import 'package:liquid/src/controller.dart';
+import 'package:liquid/src/common.dart';
 
 class User {
   int id;
@@ -18,9 +18,13 @@ class UserController {
     return User(id: 0, name: 'Guillaume Belouin');
   }
 
+  @Get('/')
+  User getUserByName(@Param('name') String name) {
+    return User(id: 0, name: name);
+  }
+
   @Status(201)
   @Header('test-header', 'test-value')
-  @Header('test-header2', 'test-value2')
   @Post('/')
   User postUser() {
     return User(id: 0, name: 'Guillaume Belouin created');

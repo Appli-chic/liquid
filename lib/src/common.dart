@@ -13,6 +13,13 @@ class Controller {
   const Controller(this.path) : assert(path != null);
 }
 
+/// Retrieve the parameter value defined with this [name]
+class Param {
+  final String name;
+
+  const Param(this.name) : assert(name != null);
+}
+
 /// Add a header to the response
 class Header {
   final String header;

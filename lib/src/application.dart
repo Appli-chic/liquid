@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'dart:mirrors';
 
-import 'controller.dart';
+import 'common.dart';
 import 'response.dart';
 
 class Application {
@@ -71,25 +71,53 @@ class Application {
     // Browse each methods from the controller
     for (var entry in methods.entries) {
       // Browse through the metadata values
-      for (var metadata in entry.value.metadata) {
-        var metadataValue = metadata.reflectee;
+      if (!isMethodFound) {
+        for (var metadata in entry.value.metadata) {
+          var metadataValue = metadata.reflectee;
 
-        // Check if the metadata name is corresponding to the http methods
-        if (methodList
-            .contains(MirrorSystem.getName(metadata.type.simpleName))) {
-          String methodPath = metadataValue.path;
-          int indexControllerPath =
-              path.indexOf(controllerPath) + controllerPath.length;
+          // Check if the metadata name is corresponding to the http methods
+          if (methodList
+              .contains(MirrorSystem.getName(metadata.type.simpleName))) {
+            String methodPath = metadataValue.path;
 
-          // Check if the path is corresponding controller + function path
-          if (methodPath != null) {
-            if (request.method ==
-                MirrorSystem.getName(metadata.type.simpleName).toUpperCase()) {
-              if ((methodPath == '/' && indexControllerPath == path.length) ||
-                  path == '$controllerPath$methodPath') {
-                isMethodFound = true;
-                method = entry.value;
-                break;
+            // Check if the path is corresponding controller + function path
+            if (methodPath != null) {
+              if (request.method ==
+                  MirrorSystem.getName(metadata.type.simpleName)
+                      .toUpperCase()) {
+                if (_checkUrlIsCorresponding(
+                    request, controllerPath, path, methodPath, entry.value)) {
+                  // Check if the right arguments are given
+                  bool doAllParamExists = true;
+                  var params = request.requestedUri.queryParameters;
+
+                  method = entry.value;
+                  if (method.parameters != null &&
+                      method.parameters.isNotEmpty) {
+                    for (var param in method.parameters) {
+                      bool doParamExists = false;
+
+                      for (var metadata in param.metadata) {
+                        if (MirrorSystem.getName(metadata.type.simpleName) ==
+                            "Param") {
+                          if (params.containsKey(metadata.reflectee.name)) {
+                            doParamExists = true;
+                          }
+                        }
+                      }
+
+                      if (!doParamExists) {
+                        doAllParamExists = false;
+                        break;
+                      }
+                    }
+                  }
+
+                  if (doAllParamExists) {
+                    isMethodFound = true;
+                    break;
+                  }
+                }
               }
             }
           }
@@ -116,11 +144,66 @@ class Application {
     return isMethodFound;
   }
 
+  /// Check if the url is corresponding to the method url
+  bool _checkUrlIsCorresponding(HttpRequest request, String controllerPath,
+      String path, String methodPath, MethodMirror method) {
+    int indexControllerPath =
+        path.indexOf(controllerPath) + controllerPath.length;
+
+    if ((methodPath == '/' && indexControllerPath == path.length) ||
+        path == '$controllerPath$methodPath') {
+      return true;
+    } else {
+      List<String> paramList = List();
+
+      if (request.requestedUri.queryParameters.isNotEmpty) {
+        for (var param in request.requestedUri.queryParameters.entries) {
+          for (var paramMethod in method.parameters) {
+            for (var metadata in paramMethod.metadata) {
+              String paramName = MirrorSystem.getName(metadata.type.simpleName);
+              if (paramName == "Param") {
+                if (metadata.reflectee.name == param.key) {
+                  paramList.add(paramName);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (paramList.length == request.requestedUri.queryParameters.length) {
+        if ((methodPath == '/' && indexControllerPath == path.length) ||
+            path.split('?')[0] == '$controllerPath$methodPath') {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   /// Call the [method] and create a response from the answer of this one
   _callMethod(HttpRequest request, dynamic controller, MethodMirror method,
       Response response) {
+    // Instanciate the controller
     var apiController = reflectClass(controller).newInstance(Symbol(""), []);
-    var valueInstanceMirror = apiController.invoke(method.simpleName, []);
+
+    // Add the parameters
+    var paramValues = List<dynamic>();
+    var params = request.requestedUri.queryParameters;
+    for (var param in method.parameters) {
+      for (var metadata in param.metadata) {
+        if (MirrorSystem.getName(metadata.type.simpleName) == "Param") {
+          if (params.containsKey(metadata.reflectee.name)) {
+            paramValues.add(params[metadata.reflectee.name]);
+          }
+        }
+      }
+    }
+
+    // Call the method
+    var valueInstanceMirror =
+        apiController.invoke(method.simpleName, paramValues);
     var value = valueInstanceMirror.reflectee;
 
     var httpResponse = request.response;
