@@ -18,6 +18,7 @@ class UserController {
     return User(id: 0, name: 'Guillaume Belouin');
   }
 
+  @Status(201)
   @Post('/')
   User postUser() {
     return User(id: 0, name: 'Guillaume Belouin created');

@@ -4,6 +4,9 @@ import 'dart:io';
 
 import 'dart:mirrors';
 
+import 'controller.dart';
+import 'response.dart';
+
 class Application {
   HttpServer _server;
   List<dynamic> _controllerList = [];
@@ -60,57 +63,72 @@ class Application {
   /// If one method contains the right path then we will call it.
   bool _checkingEachMethods(HttpRequest request, dynamic controller,
       String controllerPath, String path) {
+    MethodMirror method;
     bool isMethodFound = false;
     Map<Symbol, MethodMirror> methods =
         reflectClass(controller).instanceMembers;
 
+    // Browse each methods from the controller
     for (var entry in methods.entries) {
-      var metadataValue = entry.value.metadata.first.reflectee;
+      // Browse through the metadata values
+      for (var metadata in entry.value.metadata) {
+        var metadataValue = metadata.reflectee;
 
-      try {
-        if (metadataValue.path != null) {
+        // Check if the metadata name is corresponding to the http methods
+        if (methodList
+            .contains(MirrorSystem.getName(metadata.type.simpleName))) {
           String methodPath = metadataValue.path;
           int indexControllerPath =
               path.indexOf(controllerPath) + controllerPath.length;
 
+          // Check if the path is corresponding controller + function path
           if (methodPath != null) {
             if (request.method ==
-                MirrorSystem.getName(entry.value.metadata.first.type.simpleName)
-                    .toUpperCase()) {
-              if (methodPath == '/' && indexControllerPath == path.length) {
-                _callMethod(request, controller, entry.value);
+                MirrorSystem.getName(metadata.type.simpleName).toUpperCase()) {
+              if ((methodPath == '/' && indexControllerPath == path.length) ||
+                  path == '$controllerPath$methodPath') {
                 isMethodFound = true;
-                break;
-              } else if (path == '$controllerPath$methodPath') {
-                _callMethod(request, controller, entry.value);
-                isMethodFound = true;
+                method = entry.value;
                 break;
               }
             }
           }
         }
-      } catch (e) {
-        print(e);
       }
+    }
+
+    // If the method is found, we add all the metadata to the query and call the method
+    if (isMethodFound) {
+      var response = Response();
+
+      for (var metadata in method.metadata) {
+        if (MirrorSystem.getName(metadata.type.simpleName) == 'Status') {
+          response.statusCode = metadata.reflectee.code;
+        }
+      }
+
+      _callMethod(request, controller, method, response);
     }
 
     return isMethodFound;
   }
 
   /// Call the [method] and create a response from the answer of this one
-  _callMethod(HttpRequest request, dynamic controller, MethodMirror method) {
+  _callMethod(HttpRequest request, dynamic controller, MethodMirror method,
+      Response response) {
     var apiController = reflectClass(controller).newInstance(Symbol(""), []);
     var valueInstanceMirror = apiController.invoke(method.simpleName, []);
     var value = valueInstanceMirror.reflectee;
 
-    var response = request.response;
+    var httpResponse = request.response;
+    httpResponse.statusCode = response.statusCode;
 
     // Write the response if a value is returned
     if (value != null) {
-      _createResponseFromType(response, value);
+      _createResponseFromType(httpResponse, value);
     }
 
-    response.close();
+    httpResponse.close();
   }
 
   /// Create a [response] according to the type from the returned [value]
