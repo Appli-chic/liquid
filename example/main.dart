@@ -19,6 +19,8 @@ class UserController {
   }
 
   @Status(201)
+  @Header('test-header', 'test-value')
+  @Header('test-header2', 'test-value2')
   @Post('/')
   User postUser() {
     return User(id: 0, name: 'Guillaume Belouin created');

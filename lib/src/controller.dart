@@ -13,6 +13,18 @@ class Controller {
   const Controller(this.path) : assert(path != null);
 }
 
+/// Add a header to the response
+class Header {
+  final String header;
+  final String value;
+
+  const Header(
+    this.header,
+    this.value,
+  )   : assert(header != null),
+        assert(value != null);
+}
+
 /// Defines the status the function should return if everything is allright
 class Status {
   final int code;

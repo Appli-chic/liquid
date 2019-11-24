@@ -104,6 +104,9 @@ class Application {
       for (var metadata in method.metadata) {
         if (MirrorSystem.getName(metadata.type.simpleName) == 'Status') {
           response.statusCode = metadata.reflectee.code;
+        } else if (MirrorSystem.getName(metadata.type.simpleName) == 'Header') {
+          response.headers[metadata.reflectee.header] =
+              metadata.reflectee.value;
         }
       }
 
@@ -122,6 +125,10 @@ class Application {
 
     var httpResponse = request.response;
     httpResponse.statusCode = response.statusCode;
+
+    for (var header in response.headers.entries) {
+      httpResponse.headers.add(header.key, header.value);
+    }
 
     // Write the response if a value is returned
     if (value != null) {
