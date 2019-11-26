@@ -12,3 +12,4 @@ doc/api/
 
 .vscode/
 .idea/
+coverage/

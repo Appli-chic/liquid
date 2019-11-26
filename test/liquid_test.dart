@@ -1,15 +1,27 @@
+import 'package:http/http.dart' as http;
+import 'package:http/http.dart';
+
 import 'package:liquid/liquid.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('A group of tests', () {
+  group('Common package', () {
     Application app;
+    BaseClient client;
 
-    setUp(() async {
+    setUp(() {
+      client = http.Client();
       app = Application();
-      await app.listen(3000);
+      app.listen(3000);
     });
 
-    test('First Test', () {});
+    tearDown(() {
+      app.close();
+    });
+
+    test('Inexistant url', () async {
+      var response = await client.get('http://127.0.0.1:3000/');
+      expect(response.statusCode, equals(404));
+    });
   });
 }

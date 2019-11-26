@@ -1,15 +1,6 @@
-import 'package:liquid/liquid.dart';
 import 'package:liquid/src/common.dart';
 
-class User {
-  int id;
-  String name;
-
-  User({
-    this.id,
-    this.name,
-  });
-}
+import '../models/user.dart';
 
 @Controller('users')
 class UserController {
@@ -34,10 +25,4 @@ class UserController {
   String getUserText() {
     return 'Guillaume Belouin';
   }
-}
-
-main() async {
-  var app = Application();
-  app.addController(UserController);
-  await app.listen(3000);
 }

@@ -4,20 +4,48 @@ import 'dart:io';
 
 import 'dart:mirrors';
 
+import 'package:jaguar_hotreload/jaguar_hotreload.dart';
+import 'dart:developer' as dev;
+import 'package:path/path.dart' as path;
+
 import 'common.dart';
 import 'response.dart';
 
 class Application {
   HttpServer _server;
   List<dynamic> _controllerList = [];
-
   addController(dynamic controller) {
     _controllerList.add(controller);
+  }
+
+  /// Close the server when we are done with it
+  Future<void> close() async {
+    await _server.close();
+  }
+
+  /// Creates a hot reload for the web server.
+  _addHotReload() async {
+    if (HotReloader.isHotReloadable) {
+      var info = await dev.Service.getInfo();
+      var uri = info.serverUri;
+      uri = uri.replace(path: path.join(uri.path, 'ws'));
+      if (uri.scheme == 'https') {
+        uri = uri.replace(scheme: 'wss');
+      } else {
+        uri = uri.replace(scheme: 'ws');
+      }
+
+      print('Hot reloading enabled');
+      final reloader = HotReloader(vmServiceUrl: uri.toString());
+      await reloader.addPath('.');
+      await reloader.go();
+    }
   }
 
   /// Listen to the specific [port] and initialize the [_server]
   /// Catches all the server's requests
   Future<void> listen(int port) async {
+    _addHotReload();
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
     print("The server is listening at ${_server.address.host}:${_server.port}");
 
