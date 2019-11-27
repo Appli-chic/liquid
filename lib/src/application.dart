@@ -13,9 +13,11 @@ import 'response.dart';
 
 class Application {
   HttpServer _server;
-  List<dynamic> _controllerList = [];
-  addController(dynamic controller) {
-    _controllerList.add(controller);
+  List<Type> _controllerList = [];
+
+  /// Set all the controllers
+  setControllers(List<Type> controllers) {
+    _controllerList = controllers;
   }
 
   /// Close the server when we are done with it
@@ -201,7 +203,8 @@ class Application {
 
       if (paramList.length == request.requestedUri.queryParameters.length) {
         if ((methodPath == '/' && indexControllerPath == path.length) ||
-            path.split('?')[0] == '$controllerPath$methodPath') {
+            path.split('?')[0] == '$controllerPath$methodPath' ||
+            '${path.split('?')[0]}/' == '$controllerPath$methodPath') {
           return true;
         }
       }
