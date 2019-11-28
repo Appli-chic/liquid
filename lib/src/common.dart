@@ -13,6 +13,11 @@ class Controller {
   const Controller(this.path) : assert(path != null);
 }
 
+/// Retrieve the body and put it in the variable
+class Body {
+  const Body();
+}
+
 /// Retrieve the parameter value defined with this [name]
 class Param {
   final String name;

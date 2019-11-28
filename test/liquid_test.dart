@@ -7,13 +7,23 @@ import 'package:liquid/liquid.dart';
 import 'package:liquid/src/common.dart';
 import 'package:test/test.dart';
 
+class Role {
+  String name;
+
+  Role({
+    this.name,
+  });
+}
+
 class User {
   int id;
   String name;
+  List<Role> roles;
 
   User({
     this.id,
     this.name,
+    this.roles,
   });
 }
 
@@ -31,9 +41,21 @@ class UserController {
 
   @Status(201)
   @Header('test-header', 'test-value')
-  @Post('/')
-  User postUser() {
-    return User(id: 0, name: 'Guillaume Belouin created');
+  @Post('/name')
+  User postUserWithName(@Body() String name) {
+    return User(id: 0, name: name);
+  }
+
+  @Status(201)
+  @Post('/id')
+  User postUserWithId(@Body() int id) {
+    return User(id: id, name: 'Guillaume Belouin');
+  }
+
+  @Status(201)
+  @Post('/list')
+  List<User> postUserList(@Body() List<User> userList) {
+    return userList;
   }
 
   @Put('/')
@@ -92,6 +114,7 @@ void main() {
       var response = await client.get('http://127.0.0.1:3000/users');
       expect(response.statusCode, equals(200));
       expect(json.decode(response.body), {
+        'roles': {},
         'name': 'Guillaume Belouin',
         'id': 0,
       });
@@ -101,6 +124,7 @@ void main() {
       var response = await client.get('http://127.0.0.1:3000/users/?name=test');
       expect(response.statusCode, equals(200));
       expect(json.decode(response.body), {
+        'roles': {},
         'name': 'test',
         'id': 0,
       });
@@ -110,16 +134,19 @@ void main() {
       var response = await client.get('http://127.0.0.1:3000/users?name=test');
       expect(response.statusCode, equals(200));
       expect(json.decode(response.body), {
+        'roles': {},
         'name': 'test',
         'id': 0,
       });
     });
 
-    test('POST user with header and status defined', () async {
-      var response = await client.post('http://127.0.0.1:3000/users');
+    test('POST user with header and status defined with name', () async {
+      var response = await client.post('http://127.0.0.1:3000/users/name',
+          body: 'Guillaume Belouin');
       expect(response.statusCode, equals(201));
       expect(json.decode(response.body), {
-        'name': 'Guillaume Belouin created',
+        'roles': {},
+        'name': 'Guillaume Belouin',
         'id': 0,
       });
 
@@ -134,10 +161,63 @@ void main() {
       expect(doHeaderIsCorrect, equals(true));
     });
 
+    test('POST user with id', () async {
+      var response =
+          await client.post('http://127.0.0.1:3000/users/id', body: "1");
+      expect(response.statusCode, equals(201));
+      expect(json.decode(response.body), {
+        'roles': {},
+        'name': 'Guillaume Belouin',
+        'id': 1,
+      });
+    });
+
+    test('POST users from List body', () async {
+      var response = await client.post('http://127.0.0.1:3000/users/list',
+          body: json.encode([
+            {
+              'name': 'Guillaume Belouin',
+              'id': 0,
+              'roles': [
+                {'name': 'Admin'},
+                {'name': 'User'}
+              ]
+            },
+            {
+              'name': 'Jocelyn Zaruma',
+              'id': 1,
+              'roles': [
+                {'name': 'Moderator'},
+                {'name': 'User'}
+              ]
+            },
+          ]));
+      expect(response.statusCode, equals(201));
+      expect(json.decode(response.body), [
+        {
+          'name': 'Guillaume Belouin',
+          'id': 0,
+          'roles': [
+            {'name': 'Admin'},
+            {'name': 'User'}
+          ]
+        },
+        {
+          'name': 'Jocelyn Zaruma',
+          'id': 1,
+          'roles': [
+            {'name': 'Moderator'},
+            {'name': 'User'}
+          ]
+        },
+      ]);
+    });
+
     test('PUT user', () async {
       var response = await client.put('http://127.0.0.1:3000/users');
       expect(response.statusCode, equals(200));
       expect(json.decode(response.body), {
+        'roles': {},
         'name': 'Guillaume Belouin put',
         'id': 0,
       });
@@ -153,6 +233,7 @@ void main() {
       var response = await client.patch('http://127.0.0.1:3000/users');
       expect(response.statusCode, equals(200));
       expect(json.decode(response.body), {
+        'roles': {},
         'name': 'Guillaume Belouin patched',
         'id': 0,
       });

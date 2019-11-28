@@ -1,7 +1,6 @@
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
-
 import 'dart:mirrors';
 
 import 'package:jaguar_hotreload/jaguar_hotreload.dart';
@@ -133,6 +132,10 @@ class Application {
                           if (params.containsKey(metadata.reflectee.name)) {
                             doParamExists = true;
                           }
+                        } else if (MirrorSystem.getName(
+                                metadata.type.simpleName) ==
+                            "Body") {
+                          doParamExists = true;
                         }
                       }
 
@@ -195,6 +198,8 @@ class Application {
                 if (metadata.reflectee.name == param.key) {
                   paramList.add(paramName);
                 }
+              } else if (paramName == "Body") {
+                paramList.add(paramName);
               }
             }
           }
@@ -213,9 +218,125 @@ class Application {
     return false;
   }
 
+  /// Decode the body contained in the [request]
+  dynamic _decodeBody(HttpRequest request, ParameterMirror param) async {
+    var body = await Utf8Codec().decodeStream(request);
+    var type = param.type;
+
+    // Parse the result with the wanted param type
+    if (type.isAssignableTo(reflectType(String))) {
+      return body;
+    } else if (type.isAssignableTo(reflectType(int))) {
+      return int.parse(body);
+    } else if (type.isAssignableTo(reflectType(double))) {
+      return double.parse(body);
+    } else if (type.isAssignableTo(reflectType(bool))) {
+      if (body == 'true') {
+        return true;
+      } else {
+        return false;
+      }
+    } else if (type.isAssignableTo(reflectType(List))) {
+      TypeMirror argumentType = type.typeArguments[0];
+      dynamic decodedBody = json.decode(body);
+      ClassMirror clsMirror = reflectType(List, [argumentType.reflectedType]);
+      var result = clsMirror.newInstance(const Symbol(''), []).reflectee;
+
+      for (var item in decodedBody) {
+        result.add(_parseJsonToObject(item, argumentType));
+      }
+
+      return result;
+    } else if (type.isAssignableTo(reflectType(Set))) {
+      return json.encode(body);
+    } else if (type.isAssignableTo(reflectType(Map))) {
+      return json.encode(body);
+    } else {
+      TypeMirror argumentType = type.typeArguments[0];
+      dynamic decodedBody = json.decode(body);
+      return _parseJsonToObject(decodedBody, argumentType);
+    }
+  }
+
+  /// Parse JSON into an object
+  dynamic _parseJsonToObject(dynamic item, TypeMirror type) {
+    InstanceMirror valueInstance = reflect(item);
+
+    if (type.isAssignableTo(reflectType(String))) {
+      return item;
+    } else if (type.isAssignableTo(reflectType(int))) {
+      if (valueInstance.type.isAssignableTo(reflectType(int))) {
+        return item;
+      } else {
+        return int.parse(item);
+      }
+    } else if (type.isAssignableTo(reflectType(double))) {
+      if (valueInstance.type.isAssignableTo(reflectType(double))) {
+        return item;
+      } else {
+        return double.parse(item);
+      }
+    } else if (type.isAssignableTo(reflectType(bool))) {
+      if (valueInstance.type.isAssignableTo(reflectType(bool))) {
+        return item;
+      } else {
+        if (item == 'true') {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    } else if (type.isAssignableTo(reflectType(List))) {
+      var argumentType = type.typeArguments[0];
+      var decodedBody = item is String ? json.decode(item) : item;
+      ClassMirror clsMirror = reflectType(List, [argumentType.reflectedType]);
+      var result = clsMirror.newInstance(const Symbol(''), []).reflectee;
+
+      for (var item in decodedBody) {
+        result.add(_parseJsonToObject(item, argumentType));
+      }
+
+      return result;
+    } else if (type.isAssignableTo(reflectType(Set))) {
+      var argumentType = type.typeArguments[0];
+      var decodedBody = item is String ? json.decode(item) : item;
+      ClassMirror clsMirror = reflectType(Set, [argumentType.reflectedType]);
+      var result = clsMirror.newInstance(const Symbol(''), []).reflectee;
+
+      for (var item in decodedBody) {
+        result.add(_parseJsonToObject(item, argumentType));
+      }
+
+      return result;
+    } else if (type.isAssignableTo(reflectType(Map))) {
+      return json.encode(item);
+    } else {
+      ClassMirror model = reflectClass(type.reflectedType);
+      var result = model.newInstance(Symbol(""), []);
+
+      // Find all the declarations from the type
+      Map<Symbol, DeclarationMirror> declarations = model.declarations;
+      var objectMap = item as Map<String, dynamic>;
+
+      // Add the data of each fields contained in this object
+      declarations.forEach((Symbol key, DeclarationMirror declaration) {
+        if (declaration is VariableMirror) {
+          for (var field in objectMap.entries) {
+            if (field.key == MirrorSystem.getName(declaration.simpleName)) {
+              var value = _parseJsonToObject(field.value, declaration.type);
+              result.setField(declaration.simpleName, value);
+            }
+          }
+        }
+      });
+
+      return result.reflectee;
+    }
+  }
+
   /// Call the [method] and create a response from the answer of this one
   _callMethod(HttpRequest request, dynamic controller, MethodMirror method,
-      Response response) {
+      Response response) async {
     // Instanciate the controller
     var apiController = reflectClass(controller).newInstance(Symbol(""), []);
 
@@ -228,6 +349,8 @@ class Application {
           if (params.containsKey(metadata.reflectee.name)) {
             paramValues.add(params[metadata.reflectee.name]);
           }
+        } else if (MirrorSystem.getName(metadata.type.simpleName) == "Body") {
+          paramValues.add(await _decodeBody(request, param));
         }
       }
     }
@@ -249,7 +372,7 @@ class Application {
       _createResponseFromType(httpResponse, value);
     }
 
-    httpResponse.close();
+    await httpResponse.close();
   }
 
   /// Create a [response] according to the type from the returned [value]
@@ -260,37 +383,65 @@ class Application {
     } else if (value is bool) {
       response.headers.contentType = ContentType.text;
       response.write(value ? 'true' : 'false');
-    } else if (value is List) {
-    } else if (value is Set) {
+    } else if (value is List || value is Set) {
+      response.headers.contentType = ContentType.json;
+      var jsonResponse = _parseObjectToJson(value);
+      response.write(json.encode(jsonResponse));
     } else if (value is Map) {
     } else {
       // Should parse to json
       response.headers.contentType = ContentType.json;
-      String jsonResponse = _parseObjectToJson(value);
-      response.write(jsonResponse);
+      var jsonResponse = _parseObjectToJson(value);
+      response.write(json.encode(jsonResponse));
     }
   }
 
   /// Transforms objects [value] into JSON data
-  String _parseObjectToJson(dynamic value) {
+  dynamic _parseObjectToJson(dynamic value) {
     var result = HashMap<String, dynamic>();
     InstanceMirror valueInstance = reflect(value);
     ClassMirror valueType = valueInstance.type;
 
-    // Find all the declarations from the type
-    Map<Symbol, DeclarationMirror> declarations =
-        reflectClass(valueType.reflectedType).declarations;
+    if (value is String || value is int || value is double || value is bool) {
+    } else if (value is List) {
+      return value.map((e) => _parseObjectToJson(e)).toList();
+    } else if (value is Set) {
+      return value.map((e) => _parseObjectToJson(e)).toSet();
+    } else if (value is Map) {
+    } else {
+      // Find all the declarations from the type
+      Map<Symbol, DeclarationMirror> declarations =
+          reflectClass(valueType.reflectedType).declarations;
 
-    // Add the data of each fields contained in this object
-    declarations.forEach((Symbol key, DeclarationMirror declaration) {
-      if (declaration is VariableMirror) {
-        Symbol field = declaration.simpleName;
-        String fieldName = MirrorSystem.getName(field);
-        var fieldValue = valueInstance.getField(field).reflectee;
-        result[fieldName] = fieldValue;
-      }
-    });
+      // Add the data of each fields contained in this object
+      declarations.forEach((Symbol key, DeclarationMirror declaration) {
+        if (declaration is VariableMirror) {
+          Symbol field = declaration.simpleName;
+          String fieldName = MirrorSystem.getName(field);
+          var fieldValue = valueInstance.getField(field).reflectee;
 
-    return json.encode(result);
+          if (fieldName != null) {
+            if (fieldValue is String ||
+                fieldValue is int ||
+                fieldValue is double ||
+                fieldValue is bool) {
+            } else if (fieldValue is List) {
+              fieldValue =
+                  fieldValue.map((e) => _parseObjectToJson(e)).toList();
+            } else if (fieldValue is Set) {
+              fieldValue = fieldValue.map((e) => _parseObjectToJson(e)).toSet();
+            } else if (fieldValue is Map) {
+            } else {
+              // Should parse to json
+              fieldValue = _parseObjectToJson(fieldValue);
+            }
+
+            result[fieldName] = fieldValue;
+          }
+        }
+      });
+    }
+
+    return result;
   }
 }
