@@ -150,7 +150,7 @@ void main() {
         'id': 0,
       });
 
-      bool doHeaderIsCorrect = false;
+      var doHeaderIsCorrect = false;
 
       for (var header in response.headers.entries) {
         if (header.key == 'test-header' && header.value == 'test-value') {
@@ -163,7 +163,7 @@ void main() {
 
     test('POST user with id', () async {
       var response =
-          await client.post('http://127.0.0.1:3000/users/id', body: "1");
+          await client.post('http://127.0.0.1:3000/users/id', body: '1');
       expect(response.statusCode, equals(201));
       expect(json.decode(response.body), {
         'roles': {},

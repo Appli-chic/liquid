@@ -1,4 +1,4 @@
 class Response {
   int statusCode = 200;
-  Map<String, String> headers = Map();
+  Map<String, String> headers = {};
 }

@@ -15,7 +15,7 @@ class Application {
   List<Type> _controllerList = [];
 
   /// Set all the controllers
-  setControllers(List<Type> controllers) {
+  void setControllers(List<Type> controllers) {
     _controllerList = controllers;
   }
 
@@ -25,7 +25,7 @@ class Application {
   }
 
   /// Creates a hot reload for the web server.
-  _addHotReload() async {
+  void _addHotReload() async {
     if (HotReloader.isHotReloadable) {
       var info = await dev.Service.getInfo();
       var uri = info.serverUri;
@@ -48,7 +48,7 @@ class Application {
   Future<void> listen(int port) async {
     _addHotReload();
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
-    print("The server is listening at ${_server.address.host}:${_server.port}");
+    print('The server is listening at ${_server.address.host}:${_server.port}');
 
     await for (HttpRequest request in _server) {
       var methodFound = _redirectRequestsToControllers(request);
@@ -63,12 +63,12 @@ class Application {
 
   /// Redirect the [request] to the wanted controller
   bool _redirectRequestsToControllers(HttpRequest request) {
-    RegExp exp = RegExp(r'(https?:\/\/.*):(\d*)\/?(.*)');
-    List<RegExpMatch> matches =
+    var exp = RegExp(r'(https?:\/\/.*):(\d*)\/?(.*)');
+    var matches =
         exp.allMatches(request.requestedUri.toString()).toList();
 
     if (matches.isNotEmpty && matches.toList()[0].groupCount == 3) {
-      String path = matches[0].group(3);
+      var path = matches[0].group(3);
       for (var controller in _controllerList) {
         // Check if a controller contains this path
         String controllerPath =
@@ -93,8 +93,8 @@ class Application {
   bool _checkingEachMethods(HttpRequest request, dynamic controller,
       String controllerPath, String path) {
     MethodMirror method;
-    bool isMethodFound = false;
-    Map<Symbol, MethodMirror> methods =
+    var isMethodFound = false;
+    var methods =
         reflectClass(controller).instanceMembers;
 
     // Browse each methods from the controller
@@ -117,24 +117,24 @@ class Application {
                 if (_checkUrlIsCorresponding(
                     request, controllerPath, path, methodPath, entry.value)) {
                   // Check if the right arguments are given
-                  bool doAllParamExists = true;
+                  var doAllParamExists = true;
                   var params = request.requestedUri.queryParameters;
 
                   method = entry.value;
                   if (method.parameters != null &&
                       method.parameters.isNotEmpty) {
                     for (var param in method.parameters) {
-                      bool doParamExists = false;
+                      var doParamExists = false;
 
                       for (var metadata in param.metadata) {
                         if (MirrorSystem.getName(metadata.type.simpleName) ==
-                            "Param") {
+                            'Param') {
                           if (params.containsKey(metadata.reflectee.name)) {
                             doParamExists = true;
                           }
                         } else if (MirrorSystem.getName(
                                 metadata.type.simpleName) ==
-                            "Body") {
+                            'Body') {
                           doParamExists = true;
                         }
                       }
@@ -180,25 +180,25 @@ class Application {
   /// Check if the url is corresponding to the method url
   bool _checkUrlIsCorresponding(HttpRequest request, String controllerPath,
       String path, String methodPath, MethodMirror method) {
-    int indexControllerPath =
+    var indexControllerPath =
         path.indexOf(controllerPath) + controllerPath.length;
 
     if ((methodPath == '/' && indexControllerPath == path.length) ||
         path == '$controllerPath$methodPath') {
       return true;
     } else {
-      List<String> paramList = List();
+      var paramList = <String>[];
 
       if (request.requestedUri.queryParameters.isNotEmpty) {
         for (var param in request.requestedUri.queryParameters.entries) {
           for (var paramMethod in method.parameters) {
             for (var metadata in paramMethod.metadata) {
-              String paramName = MirrorSystem.getName(metadata.type.simpleName);
-              if (paramName == "Param") {
+              var paramName = MirrorSystem.getName(metadata.type.simpleName);
+              if (paramName == 'Param') {
                 if (metadata.reflectee.name == param.key) {
                   paramList.add(paramName);
                 }
-              } else if (paramName == "Body") {
+              } else if (paramName == 'Body') {
                 paramList.add(paramName);
               }
             }
@@ -237,7 +237,7 @@ class Application {
         return false;
       }
     } else if (type.isAssignableTo(reflectType(List))) {
-      TypeMirror argumentType = type.typeArguments[0];
+      var argumentType = type.typeArguments[0];
       dynamic decodedBody = json.decode(body);
       ClassMirror clsMirror = reflectType(List, [argumentType.reflectedType]);
       var result = clsMirror.newInstance(const Symbol(''), []).reflectee;
@@ -252,7 +252,7 @@ class Application {
     } else if (type.isAssignableTo(reflectType(Map))) {
       return json.encode(body);
     } else {
-      TypeMirror argumentType = type.typeArguments[0];
+      var argumentType = type.typeArguments[0];
       dynamic decodedBody = json.decode(body);
       return _parseJsonToObject(decodedBody, argumentType);
     }
@@ -260,7 +260,7 @@ class Application {
 
   /// Parse JSON into an object
   dynamic _parseJsonToObject(dynamic item, TypeMirror type) {
-    InstanceMirror valueInstance = reflect(item);
+    var valueInstance = reflect(item);
 
     if (type.isAssignableTo(reflectType(String))) {
       return item;
@@ -311,11 +311,11 @@ class Application {
     } else if (type.isAssignableTo(reflectType(Map))) {
       return json.encode(item);
     } else {
-      ClassMirror model = reflectClass(type.reflectedType);
-      var result = model.newInstance(Symbol(""), []);
+      var model = reflectClass(type.reflectedType);
+      var result = model.newInstance(Symbol(''), []);
 
       // Find all the declarations from the type
-      Map<Symbol, DeclarationMirror> declarations = model.declarations;
+      var declarations = model.declarations;
       var objectMap = item as Map<String, dynamic>;
 
       // Add the data of each fields contained in this object
@@ -335,21 +335,21 @@ class Application {
   }
 
   /// Call the [method] and create a response from the answer of this one
-  _callMethod(HttpRequest request, dynamic controller, MethodMirror method,
+  void _callMethod(HttpRequest request, dynamic controller, MethodMirror method,
       Response response) async {
     // Instanciate the controller
-    var apiController = reflectClass(controller).newInstance(Symbol(""), []);
+    var apiController = reflectClass(controller).newInstance(Symbol(''), []);
 
     // Add the parameters
-    var paramValues = List<dynamic>();
+    var paramValues = <dynamic>[];
     var params = request.requestedUri.queryParameters;
     for (var param in method.parameters) {
       for (var metadata in param.metadata) {
-        if (MirrorSystem.getName(metadata.type.simpleName) == "Param") {
+        if (MirrorSystem.getName(metadata.type.simpleName) == 'Param') {
           if (params.containsKey(metadata.reflectee.name)) {
             paramValues.add(params[metadata.reflectee.name]);
           }
-        } else if (MirrorSystem.getName(metadata.type.simpleName) == "Body") {
+        } else if (MirrorSystem.getName(metadata.type.simpleName) == 'Body') {
           paramValues.add(await _decodeBody(request, param));
         }
       }
@@ -376,7 +376,7 @@ class Application {
   }
 
   /// Create a [response] according to the type from the returned [value]
-  _createResponseFromType(HttpResponse response, dynamic value) {
+  void _createResponseFromType(HttpResponse response, dynamic value) {
     if (value is String || value is int || value is double) {
       response.headers.contentType = ContentType.text;
       response.write(value);
@@ -399,8 +399,8 @@ class Application {
   /// Transforms objects [value] into JSON data
   dynamic _parseObjectToJson(dynamic value) {
     var result = HashMap<String, dynamic>();
-    InstanceMirror valueInstance = reflect(value);
-    ClassMirror valueType = valueInstance.type;
+    var valueInstance = reflect(value);
+    var valueType = valueInstance.type;
 
     if (value is String || value is int || value is double || value is bool) {
     } else if (value is List) {
@@ -410,14 +410,14 @@ class Application {
     } else if (value is Map) {
     } else {
       // Find all the declarations from the type
-      Map<Symbol, DeclarationMirror> declarations =
+      var declarations =
           reflectClass(valueType.reflectedType).declarations;
 
       // Add the data of each fields contained in this object
       declarations.forEach((Symbol key, DeclarationMirror declaration) {
         if (declaration is VariableMirror) {
-          Symbol field = declaration.simpleName;
-          String fieldName = MirrorSystem.getName(field);
+          var field = declaration.simpleName;
+          var fieldName = MirrorSystem.getName(field);
           var fieldValue = valueInstance.getField(field).reflectee;
 
           if (fieldName != null) {
